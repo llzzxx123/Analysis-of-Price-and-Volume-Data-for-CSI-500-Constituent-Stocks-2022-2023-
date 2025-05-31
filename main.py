@@ -12,36 +12,24 @@ processed_dfs = []
 
 # 按股票代码处理
 for code, group in df.groupby('Code'):
-    # 按日期排序
     group = group.sort_values('Date').reset_index(drop=True)
-    
-    # 计算日收益率
     group['daily_return'] = group['Close'].pct_change()
-    
-    # 剔除异常数据：涨跌停和停板
     mask = (abs(group['daily_return']) > 0.2) | (
         (group['High'] == group['Low']) & 
         (group['Low'] == group['Open']) & 
         (group['Open'] == group['Close'])
     )
     cleaned_group = group[~mask].reset_index(drop=True)
-    
-    # 重新计算日收益率
     cleaned_group['daily_return'] = cleaned_group['Close'].pct_change()
     
-    # 设置日期索引以重采样
     cleaned_group.set_index('Date', inplace=True)
     
-    # 计算周收益率
     weekly = cleaned_group['Close'].resample('W').last().pct_change().rename('weekly_return')
-    # 计算月收益率
     monthly = cleaned_group['Close'].resample('M').last().pct_change().rename('monthly_return')
     
-    # 合并数据
     cleaned_group = cleaned_group.join([weekly, monthly], how='left')
     cleaned_group.reset_index(inplace=True)
     
-    # 计算累计收益率
     cleaned_group['cumulative_return'] = (1 + cleaned_group['daily_return'].fillna(0)).cumprod() - 1
     
     processed_dfs.append(cleaned_group)
@@ -54,7 +42,6 @@ for code, group in merged_df.groupby('Code'):
     if len(group) < 2:
         continue
     
-    # 年化收益率
     cum_return = group['cumulative_return'].iloc[-1]
     start_date = group['Date'].iloc[0]
     end_date = group['Date'].iloc[-1]
@@ -64,7 +51,6 @@ for code, group in merged_df.groupby('Code'):
     else:
         annualized_return = (1 + cum_return) ** (252 / days) - 1
     
-    # 夏普比率
     daily_returns = group['daily_return'].dropna()
     if len(daily_returns) < 2:
         sharpe_ratio = np.nan
@@ -72,7 +58,6 @@ for code, group in merged_df.groupby('Code'):
         annualized_volatility = daily_returns.std() * np.sqrt(252)
         sharpe_ratio = annualized_return / annualized_volatility if annualized_volatility != 0 else np.nan
     
-    # 最大回撤
     cumulative_returns = group['cumulative_return'] + 1  # 转换为净值
     peak = cumulative_returns.expanding(min_periods=1).max()
     drawdown = (peak - cumulative_returns) / peak
